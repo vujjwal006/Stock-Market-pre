@@ -1,0 +1,54 @@
+import numpy as np
+import pandas as pd
+from sklearn.preprocessing import MinMaxScaler
+from keras.models import Sequential
+from keras.layers import LSTM, Dense
+
+# Load the stock market data
+data = pd.read_csv("stock_data.csv")
+
+# Preprocess the data
+scaler = MinMaxScaler(feature_range=(0, 1))
+scaled_data = scaler.fit_transform(data['Close'].values.reshape(-1, 1))
+
+# Split the data into training and testing sets
+train_size = int(len(scaled_data) * 0.8)
+train_data = scaled_data[:train_size]
+test_data = scaled_data[train_size:]
+
+# Function to create dataset
+def create_dataset(dataset, time_steps=1):
+    X, y = [], []
+    for i in range(len(dataset) - time_steps - 1):
+        X.append(dataset[i:(i + time_steps), 0])
+        y.append(dataset[i + time_steps, 0])
+    return np.array(X), np.array(y)
+
+# Define the time steps for the LSTM model
+time_steps = 30
+
+# Create the training and testing datasets
+X_train, y_train = create_dataset(train_data, time_steps)
+X_test, y_test = create_dataset(test_data, time_steps)
+
+# Reshape the input data for LSTM (samples, time steps, features)
+X_train = np.reshape(X_train, (X_train.shape[0], X_train.shape[1], 1))
+X_test = np.reshape(X_test, (X_test.shape[0], X_test.shape[1], 1))
+
+# Build the LSTM model
+model = Sequential()
+model.add(LSTM(units=50, return_sequences=True, input_shape=(X_train.shape[1], 1)))
+model.add(LSTM(units=50))
+model.add(Dense(units=1))
+
+# Compile and train the model
+model.compile(optimizer='adam', loss='mean_squared_error')
+model.fit(X_train, y_train, epochs=10, batch_size=32)
+
+# Make predictions on the test data
+predictions = model.predict(X_test)
+predictions = scaler.inverse_transform(predictions)
+
+# Evaluate the model
+mse = np.mean((predictions - scaler.inverse_transform(y_test.reshape(-1, 1))) ** 2)
+print("Mean Squared Error:", mse)
